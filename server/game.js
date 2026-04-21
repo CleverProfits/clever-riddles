@@ -1,15 +1,16 @@
 // In-memory game sessions
 const games = new Map();
 
-export function createGame(hostSocketId) {
+export function createGame(hostSocketId, gameType = 'riddles') {
   const code = generateCode();
   const game = {
     code,
     hostSocketId,
-    riddle: null,
+    gameType,
+    question: null, // riddle or WYR question
     timerDuration: 60,
     answers: [],
-    usedRiddles: [], // Track used riddle answers to prevent duplicates
+    usedQuestions: [], // Track used questions to prevent duplicates
     round: 0,
     participants: new Map(),
     createdAt: Date.now(),
@@ -18,9 +19,9 @@ export function createGame(hostSocketId) {
   return game;
 }
 
-export function getUsedRiddles(code) {
+export function getUsedQuestions(code) {
   const game = getGame(code);
-  return game ? game.usedRiddles : [];
+  return game ? game.usedQuestions : [];
 }
 
 export function getGame(code) {
@@ -57,16 +58,21 @@ export function submitAnswer(code, socketId, answer) {
   return submission;
 }
 
-export function setRiddle(code, riddle, timerDuration) {
+export function setQuestion(code, question, timerDuration) {
   const game = getGame(code);
   if (!game) return null;
-  game.riddle = riddle;
+  game.question = question;
   game.timerDuration = timerDuration;
   game.answers = [];
   game.round += 1;
-  // Track this riddle's answer to prevent duplicates
-  if (riddle && riddle.answer) {
-    game.usedRiddles.push(riddle.answer.toLowerCase());
+
+  // Track to prevent duplicates
+  if (question) {
+    if (game.gameType === 'riddles' && question.answer) {
+      game.usedQuestions.push(question.answer.toLowerCase());
+    } else if (game.gameType === 'wyr') {
+      game.usedQuestions.push(`${question.optionA}|${question.optionB}`);
+    }
   }
   return game;
 }
@@ -81,7 +87,6 @@ function generateCode() {
   for (let i = 0; i < 5; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
-  // Ensure unique
   if (games.has(code)) return generateCode();
   return code;
 }

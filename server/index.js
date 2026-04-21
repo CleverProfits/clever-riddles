@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { generateRiddle } from './riddle.js';
-import { createGame, getGame, getUsedRiddles, joinGame, leaveGame, submitAnswer, setRiddle, deleteGame } from './game.js';
+import { generateWYR } from './wyr.js';
+import { createGame, getGame, getUsedQuestions, joinGame, leaveGame, submitAnswer, setQuestion, deleteGame } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -22,55 +23,37 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
 }
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Generate riddle
-app.get('/api/riddle', async (req, res) => {
-  try {
-    const riddle = await generateRiddle();
-    res.json(riddle);
-  } catch (error) {
-    console.error('Error generating riddle:', error);
-    res.status(500).json({
-      error: 'Failed to generate riddle',
-      message: error.message,
-    });
-  }
 });
 
 // Socket.io events
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Host creates a game
-  socket.on('host:create', (callback) => {
-    const game = createGame(socket.id);
+  // Host creates a game (riddles or wyr)
+  socket.on('host:create', ({ gameType }, callback) => {
+    const game = createGame(socket.id, gameType || 'riddles');
     socket.join(game.code);
-    callback({ code: game.code });
-    console.log('Game created:', game.code);
+    callback({ code: game.code, gameType: game.gameType });
+    console.log('Game created:', game.code, game.gameType);
   });
 
   // Host starts new riddle
   socket.on('host:newRiddle', async ({ code, timerDuration }, callback) => {
     try {
-      const usedRiddles = getUsedRiddles(code);
-      const riddle = await generateRiddle(usedRiddles);
-      const game = setRiddle(code, riddle, timerDuration);
+      const usedQuestions = getUsedQuestions(code);
+      const riddle = await generateRiddle(usedQuestions);
+      const game = setQuestion(code, riddle, timerDuration);
       if (!game) {
         callback({ error: 'Game not found' });
         return;
       }
-      // Send riddle to host (with answer)
       callback({ riddle });
-      // Send riddle to participants (without answer)
       socket.to(code).emit('game:riddle', {
         question: riddle.question,
         hint: riddle.hint,
@@ -81,15 +64,45 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Host reveals answer
-  socket.on('host:revealAnswer', ({ code }) => {
-    const game = getGame(code);
-    if (game && game.riddle) {
-      io.to(code).emit('game:answerRevealed', { answer: game.riddle.answer });
+  // Host starts new WYR question
+  socket.on('host:newWYR', async ({ code, timerDuration }, callback) => {
+    try {
+      const usedQuestions = getUsedQuestions(code);
+      const wyr = await generateWYR(usedQuestions);
+      const game = setQuestion(code, wyr, timerDuration);
+      if (!game) {
+        callback({ error: 'Game not found' });
+        return;
+      }
+      callback({ wyr });
+      socket.to(code).emit('game:wyr', {
+        optionA: wyr.optionA,
+        optionB: wyr.optionB,
+        timerDuration,
+      });
+    } catch (error) {
+      callback({ error: error.message });
     }
   });
 
-  // Host ends game
+  // Host reveals answer (riddles only)
+  socket.on('host:revealAnswer', ({ code }) => {
+    const game = getGame(code);
+    if (game && game.question && game.question.answer) {
+      io.to(code).emit('game:answerRevealed', { answer: game.question.answer });
+    }
+  });
+
+  // Host shows results (WYR)
+  socket.on('host:showResults', ({ code }) => {
+    const game = getGame(code);
+    if (game) {
+      const countA = game.answers.filter(a => a.answer === 'A').length;
+      const countB = game.answers.filter(a => a.answer === 'B').length;
+      io.to(code).emit('game:results', { countA, countB });
+    }
+  });
+
   socket.on('host:endGame', ({ code }) => {
     io.to(code).emit('game:ended');
     deleteGame(code);
@@ -104,16 +117,24 @@ io.on('connection', (socket) => {
     }
     socket.join(code);
     socket.gameCode = code;
-    callback({ success: true });
-    // Notify host
+    callback({ success: true, gameType: game.gameType });
     io.to(game.hostSocketId).emit('game:playerJoined', { playerName });
-    // If game already has a riddle, send it to the new player
-    if (game.riddle) {
-      socket.emit('game:riddle', {
-        question: game.riddle.question,
-        hint: game.riddle.hint,
-        timerDuration: game.timerDuration,
-      });
+
+    // Send current question if exists
+    if (game.question) {
+      if (game.gameType === 'riddles') {
+        socket.emit('game:riddle', {
+          question: game.question.question,
+          hint: game.question.hint,
+          timerDuration: game.timerDuration,
+        });
+      } else if (game.gameType === 'wyr') {
+        socket.emit('game:wyr', {
+          optionA: game.question.optionA,
+          optionB: game.question.optionB,
+          timerDuration: game.timerDuration,
+        });
+      }
     }
   });
 
@@ -122,12 +143,10 @@ io.on('connection', (socket) => {
     const submission = submitAnswer(code, socket.id, answer);
     if (submission) {
       const game = getGame(code);
-      // Send to host
       io.to(game.hostSocketId).emit('game:answerSubmitted', submission);
     }
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     if (socket.gameCode) {
@@ -136,7 +155,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Catch-all for SPA in production (Express 5 requires named wildcard)
 if (process.env.NODE_ENV === 'production') {
   app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));

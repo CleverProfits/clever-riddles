@@ -87,7 +87,7 @@ export default function WYRHostView() {
   const countB = answers.filter((a) => a.answer === 'B').length;
   const total = countA + countB;
 
-  const joinUrl = gameCode ? `${window.location.origin}/join/${gameCode}` : '';
+  const joinUrl = gameCode ? `${window.location.origin}/wyr/join/${gameCode}` : '';
 
   return (
     <div className="host-view wyr-host">

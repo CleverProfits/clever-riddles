@@ -35,9 +35,9 @@ app.get('/api/riddle', async (req, res) => {
   }
 });
 
-// Catch-all for SPA in production
+// Catch-all for SPA in production (Express 5 requires named wildcard)
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
 }

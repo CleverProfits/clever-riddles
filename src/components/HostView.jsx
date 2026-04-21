@@ -5,6 +5,7 @@ import RiddleDisplay from './RiddleDisplay';
 import Timer from './Timer';
 import TimerSelector from './TimerSelector';
 import AnswerDisplay from './AnswerDisplay';
+import ShareGame from './ShareGame';
 
 const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
 const TOTAL_ROUNDS = 5;
@@ -99,16 +100,11 @@ export default function HostView() {
         <h1>Clever Riddles</h1>
         {gameCode && (
           <div className="game-info">
-            <div className="game-code">
-              Game Code: <strong>{gameCode}</strong>
+            <ShareGame code={gameCode} joinUrl={joinUrl} />
+            <div className="game-stats">
+              <div className="round-info">Round {currentRound} of {TOTAL_ROUNDS}</div>
+              <div className="players-count">{players.length} player(s) joined</div>
             </div>
-            <div className="join-url">
-              Share: <code>{joinUrl}</code>
-            </div>
-            <div className="round-info">
-              Round {currentRound} of {TOTAL_ROUNDS}
-            </div>
-            <div className="players-count">{players.length} player(s) joined</div>
           </div>
         )}
       </header>

@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import TimerSelector from './TimerSelector';
 import Timer from './Timer';
 import AnswerDisplay from './AnswerDisplay';
+import ShareGame from './ShareGame';
 
 const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
 const TOTAL_ROUNDS = 5;
@@ -97,10 +98,11 @@ export default function WYRHostView() {
         <h1>Would You Rather</h1>
         {gameCode && (
           <div className="game-info">
-            <div className="game-code">Game Code: <strong>{gameCode}</strong></div>
-            <div className="join-url">Share: <code>{joinUrl}</code></div>
-            <div className="round-info">Round {currentRound} of {TOTAL_ROUNDS}</div>
-            <div className="players-count">{players.length} player(s) joined</div>
+            <ShareGame code={gameCode} joinUrl={joinUrl} />
+            <div className="game-stats">
+              <div className="round-info">Round {currentRound} of {TOTAL_ROUNDS}</div>
+              <div className="players-count">{players.length} player(s) joined</div>
+            </div>
           </div>
         )}
       </header>

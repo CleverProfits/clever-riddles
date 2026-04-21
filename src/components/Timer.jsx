@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export default function Timer({ duration, onExpire, isRunning, onStart }) {
+export default function Timer({ duration, onExpire, isRunning, onStart, autoStart = false }) {
   const [timeLeft, setTimeLeft] = useState(duration);
-  const [hasStarted, setHasStarted] = useState(false);
+  const [hasStarted, setHasStarted] = useState(autoStart);
 
   // Reset when duration changes
   useEffect(() => {

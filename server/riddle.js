@@ -20,9 +20,13 @@ const CATEGORIES = [
   'space and astronomy',
 ];
 
-export async function generateRiddle() {
+export async function generateRiddle(excludeAnswers = [], maxRetries = 3) {
   const category = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   const seed = Math.floor(Math.random() * 10000);
+
+  const excludeText = excludeAnswers.length > 0
+    ? `\n\nIMPORTANT: Do NOT use any of these answers (already used): ${excludeAnswers.join(', ')}`
+    : '';
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -34,6 +38,7 @@ export async function generateRiddle() {
         content: `Generate a clever riddle about: ${category}
 
 Random seed for variety: ${seed}
+${excludeText}
 
 Return JSON only with no markdown formatting:
 {"question": "the riddle question", "answer": "the answer", "hint": "a subtle hint"}
@@ -50,14 +55,22 @@ Requirements:
 
   const text = message.content[0].text.trim();
 
+  let riddle;
   try {
-    return JSON.parse(text);
+    riddle = JSON.parse(text);
   } catch (e) {
-    // Try to extract JSON if wrapped in markdown
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      riddle = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error('Failed to parse riddle response');
     }
-    throw new Error('Failed to parse riddle response');
   }
+
+  // Check if answer is in exclude list, retry if so
+  if (excludeAnswers.includes(riddle.answer?.toLowerCase()) && maxRetries > 0) {
+    return generateRiddle(excludeAnswers, maxRetries - 1);
+  }
+
+  return riddle;
 }

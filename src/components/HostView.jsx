@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import RiddleDisplay from './RiddleDisplay';
 import Timer from './Timer';
@@ -94,6 +95,7 @@ export default function HostView() {
   return (
     <div className="host-view">
       <header className="app-header">
+        <Link to="/" className="home-btn">← Back to Games</Link>
         <h1>Clever Riddles</h1>
         {gameCode && (
           <div className="game-info">

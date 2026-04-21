@@ -17,6 +17,27 @@
   text-align: center;
   padding: 2rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.home-btn {
+  display: inline-block;
+  color: #888;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+
+.home-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.join-form-container .home-btn {
+  margin-bottom: 1.5rem;
 }
 
 .app-header h1 {

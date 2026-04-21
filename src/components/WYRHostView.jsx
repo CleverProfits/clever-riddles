@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import TimerSelector from './TimerSelector';
 import Timer from './Timer';
@@ -92,6 +93,7 @@ export default function WYRHostView() {
   return (
     <div className="host-view wyr-host">
       <header className="app-header">
+        <Link to="/" className="home-btn">← Back to Games</Link>
         <h1>Would You Rather</h1>
         {gameCode && (
           <div className="game-info">

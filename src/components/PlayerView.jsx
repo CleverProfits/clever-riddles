@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
@@ -90,6 +90,7 @@ export default function PlayerView() {
     return (
       <div className="player-view">
         <div className="join-form-container">
+          <Link to="/" className="home-btn">← Back to Games</Link>
           <h1>Join Game</h1>
           <p className="game-code-display">Code: <strong>{code?.toUpperCase()}</strong></p>
           {error && <div className="error-message">{error}</div>}

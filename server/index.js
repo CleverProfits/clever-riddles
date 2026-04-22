@@ -207,8 +207,26 @@ io.on('connection', (socket) => {
     if (submission) {
       const game = getGame(code);
       io.to(game.hostSocketId).emit('game:imposterAnswerSubmitted', submission);
-      // Also broadcast to other players
       socket.to(code).emit('game:imposterAnswerSubmitted', submission);
+
+      // Check if all players submitted for this round - auto advance
+      const participants = getParticipantsList(code);
+      const currentRoundAnswers = game.roundAnswers.filter(a => a.round === game.currentRound);
+      const uniqueSubmitters = new Set(currentRoundAnswers.map(a => a.socketId));
+
+      if (uniqueSubmitters.size >= participants.length) {
+        // All players submitted - auto advance
+        if (game.currentRound >= game.totalRounds) {
+          // Start voting phase
+          io.to(game.hostSocketId).emit('game:autoStartVoting', { participants });
+          io.to(code).emit('game:votingStart', { participants });
+        } else {
+          // Next round
+          const updated = nextImposterRound(code);
+          io.to(game.hostSocketId).emit('game:autoNextRound', { currentRound: updated.currentRound });
+          io.to(code).emit('game:imposterNextRound', { currentRound: updated.currentRound });
+        }
+      }
     }
   });
 
@@ -217,10 +235,28 @@ io.on('connection', (socket) => {
     const result = submitVote(code, socket.id, suspectId);
     if (result) {
       const game = getGame(code);
-      io.to(game.hostSocketId).emit('game:voteSubmitted', {
-        voterId: socket.id,
-        suspectId,
+      const participants = getParticipantsList(code);
+      const totalVotes = game.votes.size;
+
+      // Calculate live vote percentages
+      const voteCounts = new Map();
+      for (const [, sId] of game.votes) {
+        voteCounts.set(sId, (voteCounts.get(sId) || 0) + 1);
+      }
+
+      const liveResults = participants.map(p => ({
+        playerId: p.id,
+        playerName: p.name,
+        votes: voteCounts.get(p.id) || 0,
+        percentage: totalVotes > 0 ? Math.round(((voteCounts.get(p.id) || 0) / totalVotes) * 100) : 0
+      })).sort((a, b) => b.votes - a.votes);
+
+      io.to(game.hostSocketId).emit('game:voteUpdate', {
+        totalVotes,
+        totalPlayers: participants.length,
+        results: liveResults
       });
+
       callback({ success: true });
     } else {
       callback({ error: 'Could not submit vote' });

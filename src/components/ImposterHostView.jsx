@@ -16,10 +16,12 @@ export default function ImposterHostView() {
   const [secretWord, setSecretWord] = useState(null);
   const [imposterId, setImposterId] = useState(null);
   const [answers, setAnswers] = useState([]);
-  const [votes, setVotes] = useState([]);
+  const [liveVoteResults, setLiveVoteResults] = useState([]);
+  const [voteProgress, setVoteProgress] = useState({ total: 0, expected: 0 });
   const [results, setResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [participantsList, setParticipantsList] = useState([]);
 
   useEffect(() => {
     const newSocket = io(SOCKET_URL);
@@ -33,8 +35,23 @@ export default function ImposterHostView() {
       setAnswers((prev) => [...prev, submission]);
     });
 
-    newSocket.on('game:voteSubmitted', ({ voterId, suspectId }) => {
-      setVotes((prev) => [...prev, { voterId, suspectId }]);
+    // Live vote updates with percentages
+    newSocket.on('game:voteUpdate', ({ totalVotes, totalPlayers, results }) => {
+      setVoteProgress({ total: totalVotes, expected: totalPlayers });
+      setLiveVoteResults(results);
+    });
+
+    // Auto-advance to next round
+    newSocket.on('game:autoNextRound', ({ currentRound }) => {
+      setCurrentRound(currentRound);
+    });
+
+    // Auto-start voting phase
+    newSocket.on('game:autoStartVoting', ({ participants }) => {
+      setParticipantsList(participants);
+      setGamePhase('voting');
+      setLiveVoteResults([]);
+      setVoteProgress({ total: 0, expected: participants.length });
     });
 
     return () => newSocket.close();
@@ -67,6 +84,7 @@ export default function ImposterHostView() {
       setCategory(response.category);
       setSecretWord(response.secretWord);
       setImposterId(response.imposterId);
+      setParticipantsList(response.participants);
       setCurrentRound(1);
       setGamePhase('playing');
     });
@@ -194,6 +212,20 @@ export default function ImposterHostView() {
               </div>
             </div>
 
+            <div className="submission-progress">
+              {(() => {
+                const currentRoundAnswers = answers.filter(a => a.round === currentRound);
+                const submitted = new Set(currentRoundAnswers.map(a => a.playerName)).size;
+                return (
+                  <p className="progress-text">
+                    {submitted} / {participantsList.length} players submitted
+                    {submitted === participantsList.length && currentRound < totalRounds && ' - Advancing to next round...'}
+                    {submitted === participantsList.length && currentRound >= totalRounds && ' - Starting voting...'}
+                  </p>
+                );
+              })()}
+            </div>
+
             <div className="answers-section">
               <h3>Clues Submitted</h3>
               {Object.entries(answersByRound).map(([round, roundAnswers]) => (
@@ -213,10 +245,6 @@ export default function ImposterHostView() {
                 <p className="waiting-text">Waiting for players to submit clues...</p>
               )}
             </div>
-
-            <button onClick={nextRound} className="control-btn">
-              {currentRound >= totalRounds ? 'Start Voting' : 'Next Round'}
-            </button>
           </div>
         )}
 
@@ -226,13 +254,28 @@ export default function ImposterHostView() {
             <p>Players are voting for who they think the Imposter is...</p>
 
             <div className="vote-status">
-              <p>{votes.length} / {players.length} votes submitted</p>
+              <p className="vote-progress">{voteProgress.total} / {voteProgress.expected} votes</p>
             </div>
+
+            {liveVoteResults.length > 0 && (
+              <div className="live-vote-results">
+                {liveVoteResults.map((r) => (
+                  <div key={r.playerId} className="live-vote-row">
+                    <span className="vote-player-name">{r.playerName}</span>
+                    <div className="vote-bar-container">
+                      <div className="vote-bar" style={{ width: `${r.percentage}%` }} />
+                    </div>
+                    <span className="vote-percentage">{r.percentage}%</span>
+                    <span className="vote-count-small">({r.votes})</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button
               onClick={revealResults}
               className="control-btn reveal-btn"
-              disabled={votes.length < players.length}
+              disabled={voteProgress.total < voteProgress.expected}
             >
               Reveal Imposter
             </button>

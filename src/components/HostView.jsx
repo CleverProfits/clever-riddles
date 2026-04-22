@@ -24,6 +24,8 @@ export default function HostView() {
   const [players, setPlayers] = useState([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [error, setError] = useState(null);
+  const [answerCount, setAnswerCount] = useState({ count: 0, total: 0 });
+  const [allSubmitted, setAllSubmitted] = useState(false);
 
   // Initialize socket
   useEffect(() => {
@@ -34,8 +36,16 @@ export default function HostView() {
       setPlayers((prev) => [...prev, playerName]);
     });
 
-    newSocket.on('game:answerSubmitted', (submission) => {
-      setAnswers((prev) => [...prev, submission]);
+    // Track answer count without revealing answers
+    newSocket.on('game:answerCount', ({ count, total }) => {
+      setAnswerCount({ count, total });
+    });
+
+    // Reveal all answers when everyone has submitted
+    newSocket.on('game:allAnswersSubmitted', ({ answers }) => {
+      setAnswers(answers);
+      setAllSubmitted(true);
+      setTimerRunning(false);
     });
 
     return () => newSocket.close();
@@ -62,6 +72,8 @@ export default function HostView() {
     setAnswers([]);
     setTimerExpired(false);
     setTimerKey((prev) => prev + 1);
+    setAnswerCount({ count: 0, total: players.length });
+    setAllSubmitted(false);
 
     socket.emit('host:newRiddle', { code: gameCode, timerDuration }, (response) => {
       setIsLoading(false);
@@ -136,7 +148,13 @@ export default function HostView() {
           </>
         )}
 
-        <AnswerDisplay answers={answers} />
+        {riddle && !allSubmitted && answerCount.total > 0 && (
+          <div className="answer-progress">
+            <p>{answerCount.count} / {answerCount.total} answers submitted</p>
+          </div>
+        )}
+
+        {allSubmitted && <AnswerDisplay answers={answers} />}
 
         <div className="admin-controls">
           {currentRound < TOTAL_ROUNDS ? (

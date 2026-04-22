@@ -352,7 +352,38 @@ io.on('connection', (socket) => {
     const submission = submitAnswer(code, socket.id, answer);
     if (submission) {
       const game = getGame(code);
-      io.to(game.hostSocketId).emit('game:answerSubmitted', submission);
+      const participants = getParticipantsList(code);
+      const uniqueSubmitters = new Set(game.answers.map(a => a.playerName));
+
+      if (game.gameType === 'riddles') {
+        // For riddles: only notify count, reveal all answers when complete
+        io.to(game.hostSocketId).emit('game:answerCount', {
+          count: uniqueSubmitters.size,
+          total: participants.length
+        });
+
+        // When all have submitted, reveal all answers at once
+        if (uniqueSubmitters.size >= participants.length) {
+          io.to(game.hostSocketId).emit('game:allAnswersSubmitted', {
+            answers: game.answers
+          });
+        }
+      } else if (game.gameType === 'wyr') {
+        // For WYR: show live vote counts, stop when all submitted
+        const countA = game.answers.filter(a => a.answer === 'A').length;
+        const countB = game.answers.filter(a => a.answer === 'B').length;
+        io.to(game.hostSocketId).emit('game:answerSubmitted', {
+          ...submission,
+          countA,
+          countB,
+          submitted: uniqueSubmitters.size,
+          total: participants.length
+        });
+
+        if (uniqueSubmitters.size >= participants.length) {
+          io.to(game.hostSocketId).emit('game:allAnswersSubmitted', {});
+        }
+      }
     }
   });
 

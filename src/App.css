@@ -447,6 +447,20 @@
   color: #888;
 }
 
+.answer-progress {
+  padding: 1.5rem;
+  background: rgba(52, 152, 219, 0.15);
+  border-radius: 12px;
+  text-align: center;
+  width: 100%;
+}
+
+.answer-progress p {
+  font-size: 1.25rem;
+  color: #3498db;
+  font-weight: 500;
+}
+
 .game-complete {
   font-size: 1.5rem;
   color: #2ecc71;

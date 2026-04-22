@@ -36,6 +36,12 @@ export default function WYRHostView() {
       setAnswers((prev) => [...prev, submission]);
     });
 
+    // Stop timer when all have submitted
+    newSocket.on('game:allAnswersSubmitted', () => {
+      setTimerRunning(false);
+      setTimerExpired(true);
+    });
+
     return () => newSocket.close();
   }, []);
 

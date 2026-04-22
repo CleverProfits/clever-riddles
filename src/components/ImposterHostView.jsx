@@ -22,6 +22,8 @@ export default function ImposterHostView() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [participantsList, setParticipantsList] = useState([]);
+  const [turnOrder, setTurnOrder] = useState([]);
+  const [currentTurnName, setCurrentTurnName] = useState(null);
 
   useEffect(() => {
     const newSocket = io(SOCKET_URL);
@@ -52,6 +54,15 @@ export default function ImposterHostView() {
       setGamePhase('voting');
       setLiveVoteResults([]);
       setVoteProgress({ total: 0, expected: participants.length });
+      setCurrentTurnName(null);
+    });
+
+    // Turn updates
+    newSocket.on('game:turnUpdate', ({ currentTurnName, currentRound, roundComplete }) => {
+      setCurrentTurnName(currentTurnName);
+      if (roundComplete) {
+        setCurrentRound(currentRound);
+      }
     });
 
     return () => newSocket.close();
@@ -85,6 +96,8 @@ export default function ImposterHostView() {
       setSecretWord(response.secretWord);
       setImposterId(response.imposterId);
       setParticipantsList(response.participants);
+      setTurnOrder(response.turnOrder);
+      setCurrentTurnName(response.currentTurnName);
       setCurrentRound(1);
       setGamePhase('playing');
     });
@@ -212,18 +225,27 @@ export default function ImposterHostView() {
               </div>
             </div>
 
-            <div className="submission-progress">
-              {(() => {
-                const currentRoundAnswers = answers.filter(a => a.round === currentRound);
-                const submitted = new Set(currentRoundAnswers.map(a => a.playerName)).size;
-                return (
-                  <p className="progress-text">
-                    {submitted} / {participantsList.length} players submitted
-                    {submitted === participantsList.length && currentRound < totalRounds && ' - Advancing to next round...'}
-                    {submitted === participantsList.length && currentRound >= totalRounds && ' - Starting voting...'}
-                  </p>
-                );
-              })()}
+            <div className="turn-order-display">
+              <h4>Turn Order</h4>
+              <div className="turn-list">
+                {turnOrder.map((player, idx) => {
+                  const hasSubmittedThisRound = answers.some(
+                    a => a.round === currentRound && a.playerName === player.name
+                  );
+                  const isCurrentTurn = player.name === currentTurnName;
+                  return (
+                    <div
+                      key={player.id}
+                      className={`turn-item ${isCurrentTurn ? 'current' : ''} ${hasSubmittedThisRound ? 'done' : ''}`}
+                    >
+                      <span className="turn-number">{idx + 1}</span>
+                      <span className="turn-name">{player.name}</span>
+                      {hasSubmittedThisRound && <span className="turn-check">✓</span>}
+                      {isCurrentTurn && !hasSubmittedThisRound && <span className="turn-arrow">◀</span>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="answers-section">

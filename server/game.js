@@ -82,7 +82,7 @@ export function deleteGame(code) {
 }
 
 // Imposter game specific functions
-export function setImposterRound(code, category, secretWord, imposterId, totalRounds) {
+export function setImposterRound(code, category, secretWord, imposterId, totalRounds, turnOrder) {
   const game = getGame(code);
   if (!game) return null;
 
@@ -94,8 +94,38 @@ export function setImposterRound(code, category, secretWord, imposterId, totalRo
   game.roundAnswers = []; // All answers across rounds
   game.votes = new Map();
   game.usedQuestions.push(secretWord.toLowerCase());
+  game.turnOrder = turnOrder; // Fixed order of player IDs
+  game.currentTurnIndex = 0; // Index into turnOrder
 
   return game;
+}
+
+export function getCurrentTurn(code) {
+  const game = getGame(code);
+  if (!game || !game.turnOrder) return null;
+  return game.turnOrder[game.currentTurnIndex];
+}
+
+export function advanceTurn(code) {
+  const game = getGame(code);
+  if (!game) return null;
+
+  game.currentTurnIndex++;
+
+  // Check if round is complete
+  if (game.currentTurnIndex >= game.turnOrder.length) {
+    game.currentTurnIndex = 0;
+
+    // Check if all rounds complete
+    if (game.currentRound >= game.totalRounds) {
+      return { game, roundComplete: true, gameComplete: true };
+    }
+
+    game.currentRound++;
+    return { game, roundComplete: true, gameComplete: false };
+  }
+
+  return { game, roundComplete: false, gameComplete: false };
 }
 
 export function submitImposterAnswer(code, socketId, answer, round) {

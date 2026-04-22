@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { generateRiddle } from './riddle.js';
 import { generateWYR } from './wyr.js';
 import { generateImposterRound, selectImposter } from './imposter.js';
-import { createGame, getGame, getUsedQuestions, joinGame, leaveGame, submitAnswer, setQuestion, deleteGame, setImposterRound, submitImposterAnswer, nextImposterRound, submitVote, getVoteResults, getParticipantsList } from './game.js';
+import { createGame, getGame, getUsedQuestions, joinGame, leaveGame, submitAnswer, setQuestion, deleteGame, setImposterRound, submitImposterAnswer, submitVote, getVoteResults, getParticipantsList, getCurrentTurn, advanceTurn } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -125,7 +125,14 @@ io.on('connection', (socket) => {
       const { category, secretWord } = await generateImposterRound(usedWords);
       const imposterId = selectImposter(participants.map(p => p.id));
 
-      setImposterRound(code, category, secretWord, imposterId, totalRounds);
+      // Shuffle participants for turn order
+      const shuffled = [...participants].sort(() => Math.random() - 0.5);
+      const turnOrder = shuffled.map(p => p.id);
+
+      setImposterRound(code, category, secretWord, imposterId, totalRounds, turnOrder);
+
+      const firstPlayerId = turnOrder[0];
+      const firstPlayerName = participants.find(p => p.id === firstPlayerId)?.name;
 
       callback({
         category,
@@ -133,7 +140,10 @@ io.on('connection', (socket) => {
         imposterId,
         currentRound: 1,
         totalRounds,
-        participants
+        participants,
+        turnOrder: shuffled,
+        currentTurnId: firstPlayerId,
+        currentTurnName: firstPlayerName
       });
 
       // Send to each player - imposter gets different info
@@ -145,6 +155,9 @@ io.on('connection', (socket) => {
           isImposter,
           currentRound: 1,
           totalRounds,
+          turnOrder: shuffled,
+          currentTurnId: firstPlayerId,
+          isYourTurn: p.id === firstPlayerId,
         });
       });
 
@@ -202,30 +215,54 @@ io.on('connection', (socket) => {
   });
 
   // Player submits imposter answer (clue)
-  socket.on('player:submitImposterAnswer', ({ code, answer, round }) => {
+  socket.on('player:submitImposterAnswer', ({ code, answer, round }, callback) => {
+    const game = getGame(code);
+    if (!game) {
+      callback?.({ error: 'Game not found' });
+      return;
+    }
+
+    // Enforce turn order
+    const currentTurnId = getCurrentTurn(code);
+    if (socket.id !== currentTurnId) {
+      callback?.({ error: 'Not your turn' });
+      return;
+    }
+
     const submission = submitImposterAnswer(code, socket.id, answer, round);
     if (submission) {
-      const game = getGame(code);
       io.to(game.hostSocketId).emit('game:imposterAnswerSubmitted', submission);
       socket.to(code).emit('game:imposterAnswerSubmitted', submission);
+      callback?.({ success: true });
 
-      // Check if all players submitted for this round - auto advance
+      // Advance turn
+      const { game: updatedGame, roundComplete, gameComplete } = advanceTurn(code);
       const participants = getParticipantsList(code);
-      const currentRoundAnswers = game.roundAnswers.filter(a => a.round === game.currentRound);
-      const uniqueSubmitters = new Set(currentRoundAnswers.map(a => a.socketId));
 
-      if (uniqueSubmitters.size >= participants.length) {
-        // All players submitted - auto advance
-        if (game.currentRound >= game.totalRounds) {
-          // Start voting phase
-          io.to(game.hostSocketId).emit('game:autoStartVoting', { participants });
-          io.to(code).emit('game:votingStart', { participants });
-        } else {
-          // Next round
-          const updated = nextImposterRound(code);
-          io.to(game.hostSocketId).emit('game:autoNextRound', { currentRound: updated.currentRound });
-          io.to(code).emit('game:imposterNextRound', { currentRound: updated.currentRound });
-        }
+      if (gameComplete) {
+        // All rounds done - start voting
+        io.to(game.hostSocketId).emit('game:autoStartVoting', { participants });
+        io.to(code).emit('game:votingStart', { participants });
+      } else {
+        // Send turn update to everyone
+        const nextTurnId = getCurrentTurn(code);
+        const nextPlayer = participants.find(p => p.id === nextTurnId);
+
+        const turnUpdate = {
+          currentTurnId: nextTurnId,
+          currentTurnName: nextPlayer?.name,
+          currentRound: updatedGame.currentRound,
+          roundComplete
+        };
+
+        io.to(game.hostSocketId).emit('game:turnUpdate', turnUpdate);
+
+        participants.forEach(p => {
+          io.to(p.id).emit('game:turnUpdate', {
+            ...turnUpdate,
+            isYourTurn: p.id === nextTurnId
+          });
+        });
       }
     }
   });

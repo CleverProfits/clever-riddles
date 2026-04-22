@@ -19,12 +19,14 @@ export default function ImposterPlayerView() {
   const [currentRound, setCurrentRound] = useState(0);
   const [totalRounds, setTotalRounds] = useState(3);
   const [clue, setClue] = useState('');
-  const [submittedClues, setSubmittedClues] = useState(new Set());
   const [answers, setAnswers] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [selectedVote, setSelectedVote] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [results, setResults] = useState(null);
+  const [turnOrder, setTurnOrder] = useState([]);
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [hasSubmittedThisRound, setHasSubmittedThisRound] = useState(false);
 
   useEffect(() => {
     const newSocket = io(SOCKET_URL);
@@ -36,14 +38,19 @@ export default function ImposterPlayerView() {
       setIsImposter(data.isImposter);
       setCurrentRound(data.currentRound);
       setTotalRounds(data.totalRounds);
+      setTurnOrder(data.turnOrder);
+      setIsMyTurn(data.isYourTurn);
+      setHasSubmittedThisRound(false);
       setGamePhase('playing');
-      setSubmittedClues(new Set());
       setClue('');
     });
 
-    newSocket.on('game:imposterNextRound', ({ currentRound }) => {
-      setCurrentRound(currentRound);
-      setClue('');
+    newSocket.on('game:turnUpdate', ({ isYourTurn, currentRound, roundComplete }) => {
+      setIsMyTurn(isYourTurn);
+      if (roundComplete) {
+        setCurrentRound(currentRound);
+        setHasSubmittedThisRound(false);
+      }
     });
 
     newSocket.on('game:imposterAnswerSubmitted', (submission) => {
@@ -93,16 +100,19 @@ export default function ImposterPlayerView() {
 
   const submitClue = (e) => {
     e.preventDefault();
-    if (!clue.trim() || submittedClues.has(currentRound)) return;
+    if (!clue.trim() || !isMyTurn || hasSubmittedThisRound) return;
 
     socket.emit('player:submitImposterAnswer', {
       code: code.toUpperCase(),
       answer: clue.trim(),
       round: currentRound,
+    }, (response) => {
+      if (response?.success) {
+        setHasSubmittedThisRound(true);
+        setIsMyTurn(false);
+        setClue('');
+      }
     });
-
-    setSubmittedClues((prev) => new Set([...prev, currentRound]));
-    setClue('');
   };
 
   const submitVote = () => {
@@ -174,13 +184,10 @@ export default function ImposterPlayerView() {
             )}
           </div>
 
-          <form onSubmit={submitClue} className="clue-form">
-            {submittedClues.has(currentRound) ? (
-              <div className="submitted-notice">
-                Clue submitted for this round. Waiting for others...
-              </div>
-            ) : (
-              <>
+          {isMyTurn && !hasSubmittedThisRound ? (
+            <div className="your-turn-notice">
+              <p className="turn-alert">It's YOUR turn!</p>
+              <form onSubmit={submitClue} className="clue-form">
                 <input
                   type="text"
                   placeholder="Enter your clue..."
@@ -192,21 +199,33 @@ export default function ImposterPlayerView() {
                 <button type="submit" disabled={!clue.trim()}>
                   Submit Clue
                 </button>
-              </>
-            )}
-          </form>
-
-          {answers.length > 0 && (
-            <div className="recent-clues">
-              <h4>Clues This Game</h4>
-              {answers.slice(-5).map((ans) => (
-                <div key={ans.id} className="clue-item">
-                  <span className="clue-player">{ans.playerName}:</span>
-                  <span className="clue-text">{ans.answer}</span>
-                </div>
-              ))}
+              </form>
+            </div>
+          ) : (
+            <div className="waiting-turn">
+              {hasSubmittedThisRound ? (
+                <p>Clue submitted! Waiting for others...</p>
+              ) : (
+                <p>Waiting for your turn...</p>
+              )}
             </div>
           )}
+
+          <div className="turn-order-player">
+            <h4>Turn Order</h4>
+            <div className="turn-list-player">
+              {turnOrder.map((player, idx) => {
+                const hasGone = answers.some(
+                  a => a.round === currentRound && a.playerName === player.name
+                );
+                return (
+                  <div key={player.id} className={`turn-pip ${hasGone ? 'done' : ''}`}>
+                    {idx + 1}. {player.name} {hasGone && '✓'}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

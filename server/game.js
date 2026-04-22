@@ -81,6 +81,88 @@ export function deleteGame(code) {
   games.delete(code?.toUpperCase());
 }
 
+// Imposter game specific functions
+export function setImposterRound(code, category, secretWord, imposterId, totalRounds) {
+  const game = getGame(code);
+  if (!game) return null;
+
+  game.category = category;
+  game.secretWord = secretWord;
+  game.imposterId = imposterId;
+  game.totalRounds = totalRounds;
+  game.currentRound = 1;
+  game.roundAnswers = []; // All answers across rounds
+  game.votes = new Map();
+  game.usedQuestions.push(secretWord.toLowerCase());
+
+  return game;
+}
+
+export function submitImposterAnswer(code, socketId, answer, round) {
+  const game = getGame(code);
+  if (!game) return null;
+  const participant = game.participants.get(socketId);
+  if (!participant) return null;
+
+  const submission = {
+    id: Date.now() + Math.random(),
+    socketId,
+    playerName: participant.name,
+    answer,
+    round,
+    timestamp: Date.now(),
+  };
+  game.roundAnswers.push(submission);
+  return submission;
+}
+
+export function nextImposterRound(code) {
+  const game = getGame(code);
+  if (!game) return null;
+  game.currentRound += 1;
+  return game;
+}
+
+export function submitVote(code, voterId, suspectId) {
+  const game = getGame(code);
+  if (!game) return null;
+  game.votes.set(voterId, suspectId);
+  return { voterId, suspectId };
+}
+
+export function getVoteResults(code) {
+  const game = getGame(code);
+  if (!game) return null;
+
+  const voteCounts = new Map();
+  for (const [voterId, suspectId] of game.votes) {
+    voteCounts.set(suspectId, (voteCounts.get(suspectId) || 0) + 1);
+  }
+
+  return {
+    votes: Array.from(game.votes.entries()).map(([voterId, suspectId]) => {
+      const voter = game.participants.get(voterId);
+      const suspect = game.participants.get(suspectId);
+      return { voterName: voter?.name, suspectName: suspect?.name };
+    }),
+    counts: Array.from(voteCounts.entries()).map(([id, count]) => {
+      const player = game.participants.get(id);
+      return { playerId: id, playerName: player?.name, votes: count };
+    }).sort((a, b) => b.votes - a.votes),
+    imposterId: game.imposterId,
+    imposterName: game.participants.get(game.imposterId)?.name,
+  };
+}
+
+export function getParticipantsList(code) {
+  const game = getGame(code);
+  if (!game) return [];
+  return Array.from(game.participants.entries()).map(([id, p]) => ({
+    id,
+    name: p.name,
+  }));
+}
+
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';

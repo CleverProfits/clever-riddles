@@ -17,6 +17,14 @@ const GAMES = [
     emoji: '🤔',
     color: '#e74c3c',
   },
+  {
+    id: 'imposter',
+    name: 'Imposter',
+    description: 'One player is the Imposter who doesn\'t know the secret word. Find them!',
+    path: '/imposter',
+    emoji: '🕵️',
+    color: '#2ecc71',
+  },
 ];
 
 export default function HomePage() {

@@ -109,6 +109,11 @@ export default function HostView() {
     <div className="host-view">
       <header className="app-header">
         <Link to="/" className="home-btn">← Back to Games</Link>
+        <img
+          src="/cp-logo-wordmark-white.png"
+          alt="CleverProfits"
+          style={{ height: '32px', marginBottom: '8px' }}
+        />
         <h1>Clever Riddles</h1>
         {gameCode && (
           <div className="game-info">

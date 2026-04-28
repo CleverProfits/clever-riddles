@@ -161,6 +161,11 @@ export default function ImposterHostView() {
     <div className="host-view imposter-host">
       <header className="app-header">
         <Link to="/" className="home-btn">← Back to Games</Link>
+        <img
+          src="/cp-logo-wordmark-white.png"
+          alt="CleverProfits"
+          style={{ height: '32px', marginBottom: '8px' }}
+        />
         <h1>Imposter</h1>
         {gameCode && (
           <div className="game-info">

@@ -31,6 +31,11 @@ export default function HomePage() {
   return (
     <div className="home-page">
       <header className="home-header">
+        <img
+          src="/cp-logo-wordmark-white.png"
+          alt="CleverProfits"
+          style={{ height: '40px', marginBottom: '16px' }}
+        />
         <h1>Clever Games</h1>
         <p>AI-powered party games for groups</p>
       </header>
